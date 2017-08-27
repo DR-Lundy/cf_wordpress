@@ -306,28 +306,148 @@
           },
 
           "install_chef" : {
+            "sources" : {
+              "/var/chef/chef-repo" : "http://github.com/opscode/chef-repo/tarball/master"
+            },
             "files" : {
               "/tmp/install.sh" : {
                 "source" : "https://www.opscode.com/chef/install.sh",
                 "mode"  : "000400",
                 "owner" : "root",
                 "group" : "root"
+              },
+              "/var/chef/chef-repo/.chef/knife.rb" : {
+                "content" : { "Fn::Join": [ "", [
+                  "cookbook_path [ '/var/chef/chef-repo/cookbooks' ]\n",
+                  "node_path [ '/var/chef/chef-repo/nodes' ]\n"
+                ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
+              },
+              "/var/chef/chef-repo/.chef/client.rb" : {
+                "content" : { "Fn::Join": [ "", [
+                  "cookbook_path [ '/var/chef/chef-repo/cookbooks' ]\n",
+                  "node_path [ '/var/chef/chef-repo/nodes' ]\n"
+                ]]},
+                "mode"  : "000400",
+                "owner" : "root",
+                "group" : "root"
               }
             },
             "commands" : {
-              "install_chef_client" : {
+              "01_make_chef_readable" : {
+                "command" : "chmod +rx /var/chef"
+              },
+              "02_install_chef" : {
                 "command" : "bash /tmp/install.sh",
-                "cwd"  : "/root"
+                "cwd"  : "/var/chef"
+              },
+              "03_create_node_list" : {
+                "command" : "chef-client -z -c /var/chef/chef-repo/.chef/client.rb",
+                "cwd" : "/var/chef/chef-repo",
+                "env" : { "HOME" : "/var/chef" }
+              }
+            }
+          },
+
+          "install_chefdk" : {
+            "packages" : {
+              "rpm" : {
+                "chefdk" : "https://packages.chef.io/files/stable/chefdk/2.1.11/el/7/chefdk-2.1.11-1.el7.x86_64.rpm"
+              },
+              "yum" : {
+                "git-all" : []
               }
             }
           },
 
           "install_wordpress" : {
             "sources" : {
-              "/etc/chef/chef-repo/cookbooks" : "https://supermarket.chef.io/cookbooks/wordpress/download"
+              "/var/chef/chef-repo/cookbooks" : "https://supermarket.chef.io/cookbooks/wordpress/download"
             },
+            "commands" : {
+              "00_git_init": {
+                "command" : "git init",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              }, 
+              "01_config_git_email": {
+                "command" : "git config --global user.email \"someone@example.co\"",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              }, 
+              "02_config_git_user": {
+                "command" : "git config --global user.name \"someone\"",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },              
+              "03_git_add": {
+                "command" : "git add --all",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "04_git_commit": {
+                "command" : "git commit -a -m \"updates\"",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              }, 
+              "05_git_save": {
+                "command" : "git stash save",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },         
+              "06_download_wordpress_cb": {
+                "command" : "knife cookbook site install wordpress",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "07_download_mysql2_chef_gem_cb": {
+                "command" : "knife cookbook site install mysql2_chef_gem 1.0.1",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "08_download_iis_cb": {
+                "command" : "knife cookbook site install iis",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "09_download_tar_cb": {
+                "command" : "knife cookbook site install tar",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "10_download_nginx_cb": {
+                "command" : "knife cookbook site install nginx 2.7.4",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "11_download_php_fpm_cb": {
+                "command" : "knife cookbook site install php-fpm 0.6.10",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "12_download_selinux_cb": {
+                "command" : "knife cookbook site install selinux",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "13_modify_wordpress_cb": {
+                "command" : "sed -i 's/\"database\": \">= 1.6.0\",//g' /var/chef/chef-repo/cookbooks/wordpress/metadata.json",
+                "cwd" : "/var/chef/chef-repo/cookbooks",
+                "env" : { "HOME" : "/var/chef" }
+              },
+              "14_configure_node_run_list" : {
+                "command" : "knife node run_list add -z `knife node list -z` recipe[wordpress]",
+                "cwd" : "/var/chef/chef-repo",
+                "env" : { "HOME" : "/var/chef" }
+              }
+            }
+          },
+
+          "run_chef" : {
             "files" : {
-              "/etc/chef/chef-repo/cookbooks/wordpress/attributes/aws_rds_config.rb" : {
+              "/var/chef/chef-repo/cookbooks/wordpress/attributes/aws_rds_config.rb" : {
                 "content": { "Fn::Join": [ "", [
                   "normal['wordpress']['db']['pass'] = '", {"Ref" : "DBPassword"}, "'\n",
                   "normal['wordpress']['db']['root_password'] = '", {"Ref" : "DBRootPassword"}, "'\n",
@@ -337,45 +457,8 @@
                 "mode"  : "000400",
                 "owner" : "root",
                 "group" : "root"
-              },
-              "/etc/chef/client.rb" : {
-                "content" : { "Fn::Join": [ "", [
-                  "chef_repo_path [ '/opt/chef/chef-repo/cookbooks' ]\n"
-                ]]},
-                "mode"  : "000400",
-                "owner" : "root",
-                "group" : "root"
               }
             },
-            "commands" : {
-              "01_get_cookbook" : {
-                "command" : "knife cookbook site download wordpress",
-                "cwd" : "/var/chef/chef-repo",
-                "env" : { "HOME" : "/var/chef" }
-              },
-              "02_unpack_cookbook" : {
-                "command" : "tar xvfz /var/chef/chef-repo/wordpress*",
-                "cwd" : "/var/chef/chef-repo/cookbooks"
-              },
-              "03_init_berkshelf": {
-                "command" : "berks init /var/chef/chef-repo/cookbooks/wordpress --skip-vagrant --skip-git",
-                "cwd" : "/var/chef/chef-repo/cookbooks/wordpress",
-                "env" : { "HOME" : "/var/chef" }
-              },
-              "04_vendorize_berkshelf" : {
-                "command" : "berks vendor",
-                "cwd" : "/var/chef/chef-repo/cookbooks/wordpress",
-                "env" : { "HOME" : "/var/chef" }
-              },
-              "05_configure_node_run_list" : {
-                "command" : "knife node run_list add -z `knife node list -z` recipe[wordpress]",
-                "cwd" : "/var/chef/chef-repo",
-                "env" : { "HOME" : "/var/chef" }
-              }
-            }
-          },
-
-          "run_chef" : {
             "commands" : {
               "01_run_chef_client" : {
                 "command" : "chef-client -z -c /var/chef/chef-repo/.chef/client.rb",
@@ -417,7 +500,7 @@
       },
       "CreationPolicy" : {
         "ResourceSignal" : {
-          "Timeout" : "PT15M"
+          "Timeout" : "PT45M"
         }
       }
     }
